@@ -1,0 +1,1 @@
+http://catalogo.codeplan.df.gov.br:80/geoserver/wfs?format_options=charset%3AUTF-8&typename=geonode%3Amancha_urbana_df&outputFormat=SHAPE-ZIP&version=1.0.0&service=WFS&request=GetFeature

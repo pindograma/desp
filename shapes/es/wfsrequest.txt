@@ -1,0 +1,1 @@
+https://ide.geobases.es.gov.br/geoserver/wfs?format_options=charset%3AUTF-8&typename=geonode%3Aijsn_bairros&outputFormat=SHAPE-ZIP&version=1.0.0&service=WFS&request=GetFeature
