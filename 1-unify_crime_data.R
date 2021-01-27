@@ -136,11 +136,13 @@ df_data = map_dfr(df_files, function(f) {
   pivot_longer(c(jan, fev, mar, abr, mai, jun, jul, ago, set, out, nov, dez), names_to = 'month') %>%
   mutate(value = as.numeric(value)) %>%
   mutate(month = month(parse_date(paste(month, year), format = '%b %Y', locale = locale('pt')))) %>%
-  group_by(crime_big, crime_small, area, year, month) %>%
-  summarize(value = sum(value)) %>%
-  ungroup()
+  group_by(year, month, area, crime) %>% # TODO: Once SSP-DF has clarified "ROUBO DE RESIDÊNCIA" duplicates, we will be able to remove this.
+  filter(n() == 1) %>%
+  ungroup() %>%
+  mutate(value = ifelse(is.na(value), 0, value))
 
-ceara_data = map_dfr(ce_files, parse_ce) %>%
+# WARNING: NA IS ACTUALLY NA. DO NOT REPLACE WITH ZERO.
+ceara_data_1 = map_dfr(ce_files, parse_ce) %>%
   filter(!grepl('Apreensão', crime) & !grepl('crack', crime)) %>%
   mutate(crime_big = case_when(
     crime == 'Crimes Violentos Letais Intencionais' ~ 'cvli',
@@ -158,7 +160,14 @@ ceara_data = map_dfr(ce_files, parse_ce) %>%
   summarize(value = sum(value)) %>%
   ungroup()
 
-salvador_data = read_csv('raw_crime_data/salvador/salvador_crimes.csv') %>%
+ceara_data_2 = read_excel('raw_crime_data/ce/manual/ce_2020.xlsx') %>%
+  pivot_longer(c(-area, -crime_big, -year), names_to = 'month') %>%
+  mutate(month = month(parse_date(paste(month, year), format = '%b %Y', locale = locale('pt')))) %>%
+  mutate(value = as.numeric(value))
+
+ceara_data = bind_rows(ceara_data_1, ceara_data_2)
+
+salvador_data_pre20 = read_csv('raw_crime_data/salvador/before_2020/salvador_crimes.csv') %>%
   mutate(date = tolower(date)) %>%
   rename(area = aisp, value = occurrences) %>%
   filter(!grepl('período', date)) %>%
@@ -188,6 +197,31 @@ salvador_data = read_csv('raw_crime_data/salvador/salvador_crimes.csv') %>%
   mutate(month = month(parse_date(date, format = '%B/%Y', locale = locale('pt')))) %>%
   select(-date)
 
+salvador_data_20_2 = read_csv('raw_crime_data/salvador/2020/salvador_2020-2.csv') %>%
+  mutate(year = 2020) %>%
+  mutate(aisp = as.numeric(str_sub(aisp, 6, 7))) %>%
+  pivot_longer(c(-month, -aisp, -year), names_to = 'crime_small')
+
+salvador_data_20_6 = read_csv('raw_crime_data/salvador/2020/salvador_2020-6.csv') %>%
+  mutate(year = 2020) %>%
+  mutate(aisp = as.numeric(str_sub(aisp, 6, 7))) %>%
+  pivot_longer(c(-month, -aisp, -year), names_to = 'crime_small')
+
+salvador_data_20 = bind_rows(salvador_data_20_2, salvador_data_20_6) %>%
+  mutate(crime_big = case_when(
+    grepl('roubo', crime_small) ~ 'roubo',
+    grepl('furto', crime_small) ~ 'furto',
+    crime_small == 'tentativa-homicidio' ~ 'tentativa-cvli',
+    crime_small == 'uso-drogas' ~ 'uso-drogas',
+    crime_small == 'morte-intervencao-policial' ~ 'morte-intervencao-policial',
+    crime_small %in% c('latrocinio', 'feminicidio', 'lesao-corporal-morte') ~ 'cvli',
+    grepl('homicidio-doloso', crime_small) ~ 'cvli',
+    crime_small == 'estupro' ~ 'sexuais'
+  )) %>%
+  rename(area = aisp)
+
+salvador_data = bind_rows(salvador_data_pre20, salvador_data_20)
+
 rio_data = read_csv2('raw_crime_data/rj/BaseDPEvolucaoMensalCisp.csv',
                      col_types = cols(aaapai = col_number(), apf = col_number(),
                                       apreensao_drogas_sem_autor = col_number(),
@@ -196,12 +230,33 @@ rio_data = read_csv2('raw_crime_data/rj/BaseDPEvolucaoMensalCisp.csv',
                                       roubo_bicicleta = col_number(),
                                       trafico_drogas = col_number(),
                                       posse_drogas = col_number())) %>%
-  select(-mes_ano, -AISP, -RISP, -munic, -mcirc, -Regiao) %>%
+  select(-mes_ano, -AISP, -RISP, -mcirc, -Regiao) %>%
   rename(month = mes, year = ano, area = CISP) %>%
   select(-letalidade_violenta, -total_roubos, -total_furtos,
          -recuperacao_veiculos, -apf, -aaapai, -cmp, -cmba,
          -pessoas_desaparecidas, -encontro_cadaver, -encontro_ossada,
-         -cvli, -registro_ocorrencias, -fase) %>%
-  pivot_longer(-c(area, month, year), names_to = 'crime')
+         -cvli, -registro_ocorrencias, -fase, -apreensao_drogas,
+         -apreensao_drogas_sem_autor, -pol_civis_mortos_serv,
+         -pol_militares_mortos_serv) %>%
+  pivot_longer(-c(area, month, year, munic), names_to = 'crime') %>%
+  mutate(crime_big = case_when(
+    crime == 'ameaca' ~ 'ameaca',
+    crime == 'estelionato' ~ 'estelionato-fraude',
+    crime == 'estupro' ~ 'sexuais',
+    crime == 'extorsao' ~ 'extorsao',
+    grepl('furto', crime) ~ 'furto',
+    grepl('roubo', crime) ~ 'roubo',
+    crime == 'hom_doloso' ~ 'cvli',
+    crime == 'hom_culposo' ~ 'homicidio-culposo',
+    crime == 'hom_por_interv_policial' ~ 'morte-intervencao-policial',
+    crime == 'latrocinio' ~ 'cvli',
+    crime == 'lesao_corp_morte' ~ 'cvli',
+    crime == 'lesao_corp_culposa' | crime == 'lesao_corp_dolosa' ~ 'lesao-corporal',
+    crime == 'posse_drogas' ~ 'uso-drogas',
+    crime == 'trafico_drogas' ~ 'trafico-drogas',
+    grepl('sequestro', crime) ~ 'sequestro',
+    crime == 'tentat_hom' ~ 'tentativa-cvli'
+  ))
+# TODO crime_small
 
-save(list = c('rio_data', 'salvador_data', 'df_data', 'ceara_data'), file = 'unified.Rdata')
+save(list = c('rio_data', 'salvador_data', 'df_data', 'ceara_data'), file = 'unified_by_area.Rdata')
