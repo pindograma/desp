@@ -53,6 +53,6 @@ Este projeto tem a seguinte estrutura:
   unifica em um único formato (se aplica para órgãos que divulgam estatísticas
   _desagregadas_).
 * **2-mergemaps.R**: Cruza os dados anteriormente tratados com informações
-  geográficas, e exporta _shapefiles_.
+  geográficas, e exporta _shapefiles_. (Em progresso.)
 
 [1]: https://pindograma-dados.s3.amazonaws.com

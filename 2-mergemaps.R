@@ -3,9 +3,9 @@
 
 library(tidyverse)
 library(sf)
-library(mapalib)
 
-load('unified.Rdata')
+load('unified_by_area.Rdata')
+load('unified_by_area2.Rdata')
 
 rj_shape = st_read('shapes/rj/lm_dp_2019.shp') %>%
   select(dp)
@@ -22,9 +22,10 @@ ba_shape = st_read('shapes/ba/SSP_AISP_SSA_2021.shp') %>%
 
 rio_data_fmt = rio_data %>%
   pivot_wider(names_from = crime, values_from = value) %>%
-  select(-month) %>%
+  select(-month, -crime_big) %>%
   group_by(area, year, munic) %>%
-  summarize_all(sum)
+  summarize_all(sum, na.rm = T) %>%
+  ungroup()
 
 df_data_fmt = df_data %>%
   select(-crime_big, -crime) %>%
@@ -38,7 +39,7 @@ ce_data_fmt = ceara_data %>%
   filter(area <= 10) %>%
   select(-month) %>%
   group_by(area, year) %>%
-  summarize_all(sum)
+  summarize_all(sum, na.rm = T)
 
 ba_data_fmt = salvador_data %>%
   select(-crime_big, -crime) %>%
@@ -48,7 +49,7 @@ ba_data_fmt = salvador_data %>%
   summarize_all(sum, na.rm = T)
 
 rio_joined = st_as_sf(left_join(rio_data_fmt, rj_shape, c('area' = 'dp'))) %>%
-  st_transform(31983)
+  st_transform(4326)
 
 df_joined = st_as_sf(left_join(df_data_fmt, df_shape, c('area' = 'ra_num'))) %>%
   st_transform(4326)
@@ -56,27 +57,5 @@ df_joined = st_as_sf(left_join(df_data_fmt, df_shape, c('area' = 'ra_num'))) %>%
 ce_joined = st_as_sf(left_join(ce_data_fmt, ce_shape, c('area' = 'ais'))) %>%
   st_transform(4326)
 
-rio_pref = get_map_points(2020, 11, c(3304557), 31983, aggregate_all_candidates, with_blank_null = T, turno = 1)
-
-
-
-#--------- POLITICS
-rio_crossed_19 = st_join(rio_joined %>% filter(year == 2019 & munic == 'Rio de Janeiro'), rio_pref, st_contains) %>%
-  st_drop_geometry() %>%
-  group_by_at(colnames(st_drop_geometry(rio_joined))) %>%
-  summarize(across(starts_with('abs_votes'), sum)) %>%
-  ungroup() %>%
-  rowwise() %>%
-  mutate(total = sum(c_across(starts_with('abs_votes')), na.rm = T)) %>%
-  mutate(pct_crivella = abs_votes_10/total, pct_paes = abs_votes_25/total) %>%
-  ungroup() %>%
-  left_join(rj_shape, c('area' = 'dp')) %>%
-  st_as_sf()
-
-rio_crossed_20 = st_join(rio_joined %>% filter(year == 2020 & munic == 'Rio de Janeiro'), rio_pref, st_contains) %>%
-  st_drop_geometry() %>%
-  group_by_at(colnames(st_drop_geometry(rio_joined))) %>%
-  summarize(across(starts_with('abs_votes'), sum)) %>%
-  ungroup() %>%
-  left_join(rj_shape, c('area' = 'dp')) %>%
-  st_as_sf()
+ba_joined = st_as_sf(left_join(ba_data_fmt, ba_shape, c('area' = 'area'))) %>%
+  st_transform(4326)

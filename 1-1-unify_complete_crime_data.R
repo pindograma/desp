@@ -3,6 +3,7 @@
 
 library(tidyverse)
 library(readxl)
+library(lubridate)
 
 es_files = list.files('raw_crime_data/es', full.names = T, pattern = 'xls')
 
@@ -42,3 +43,5 @@ es_data = map_dfr(es_files, function(f) {
     crime == 'CRIMES CONTRA PATRIMÔNIO: TENTATIVA DE LATROCÍNIO' ~ 'tentativa-cvli',
     crime == 'HOMICÍDIO: POR AÇÃO DA POLÍCIA' ~ 'morte-intervencao-policial',
   ))
+
+save(list = c('es_data'), file = 'unified_by_area_2.Rdata')
