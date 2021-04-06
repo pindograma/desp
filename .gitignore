@@ -1,3 +1,5 @@
 .DS_Store
 *.Rdata
 .Rproj.user
+
+ssp_scraper/
